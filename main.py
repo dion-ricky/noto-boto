@@ -23,7 +23,7 @@ YBOXCOUNT = int(GAMEHEIGHT / BOXMOVESTEP)
 LEFTBORDER = 40 # fixed width
 RIGHTBORDER = WINDOWWIDTH - GAMEWIDTH - LEFTBORDER
 TOPBORDER = int((WINDOWHEIGHT - GAMEHEIGHT) / 2)
-BOTTOMBORDER = int((WINDOWHEIGHT - GAMEHEIGHT) / 2)
+BOTTOMBORDER = int((WINDOWHEIGHT - GAMEHEIGHT) / 2) - BOXMARGIN
 
 GAMECAPTION = 'Tetris'
 
@@ -37,7 +37,7 @@ RIGHT = 'right'
 ROTATE = 'rotate'
 
 BGCOLOR = (255, 255, 255)
-DARKGRAY = (150, 150, 150)
+DARKGRAY = (200, 200, 200)
 BOXCOLOR = (0, 0, 0)
 
 # default
@@ -89,23 +89,23 @@ BOTTOMMARGINRECT    = Rect(0, (WINDOWHEIGHT - BOTTOMBORDER), WINDOWWIDTH, BOTTOM
 GAMEPLAYBORDER = [LEFTMARGINRECT, RIGHTMARGINRECT, BOTTOMMARGINRECT]
 
 staticboxes = []
-staticboxes_row = []
 
 def main():
     pygame.init()
     pygame.time.set_timer(USEREVENT+1, (1100 - (100 * GAMESPEED)))
     DISPLAYSURF.fill(BGCOLOR)
 
-    global staticboxes, staticboxes_row
-    staticboxes, staticboxes_row = clear_static()
+    global staticboxes
+    staticboxes = []
 
     current_piece, current_piece_label, current_rotation = generate_random_piece()
-
-    print('currentlabel=',current_piece_label)
 
     move_down = False
     move_left = False
     move_right = False
+
+    pygame.key.set_repeat(200, 50)
+
     while True:
         DISPLAYSURF.fill(BGCOLOR)
 
@@ -116,45 +116,30 @@ def main():
         draw_border()
         draw_static()
 
-        print("FPS:", FPSCLOCK.get_fps())
-
         for event in pygame.event.get():
             if event.type == QUIT or (event.type == KEYUP and event.key == K_ESCAPE):
                 pygame.quit()
                 sys.exit()
             elif event.type == KEYDOWN and event.key == K_UP:
                 current_piece, current_piece_label, current_rotation = rotate_piece(current_piece, current_piece_label, current_rotation)
-            elif event.type == USEREVENT+1:
-                current_piece = move_piece(current_piece, DOWN)
             elif event.type == KEYDOWN and event.key == K_DOWN:
-                move_down = True
+                current_piece = move_piece(current_piece, DOWN)
+                pygame.time.set_timer(USEREVENT+1, (1100 - (100 * GAMESPEED)))
             elif event.type == KEYDOWN and event.key == K_LEFT:
-                move_left = True
+                current_piece = move_piece(current_piece, LEFT)
             elif event.type == KEYDOWN and event.key == K_RIGHT:
-                move_right = True
+                current_piece = move_piece(current_piece, RIGHT)
             elif event.type == KEYDOWN and event.key == K_SPACE:
                 drop_piece(current_piece)
                 current_piece = None
-
-            if event.type == KEYUP and event.key == K_DOWN:
-                move_down = False
-            elif event.type == KEYUP and event.key == K_LEFT:
-                move_left = False
-            elif event.type == KEYUP and event.key == K_RIGHT:
-                move_right = False
+            elif event.type == USEREVENT+1:
+                current_piece = move_piece(current_piece, DOWN)
 
             if current_piece == None:
                 break
 
-        if current_piece is not None:
-            if move_down:
-                current_piece = move_piece(current_piece, DOWN)
-            elif move_left:
-                current_piece = move_piece(current_piece, LEFT)
-            elif move_right:
-                current_piece = move_piece(current_piece, RIGHT)
-
         if current_piece == None:
+            staticboxes = clear_static()
             current_piece, current_piece_label, current_rotation = generate_random_piece()
 
         pygame.display.update()
@@ -235,14 +220,21 @@ def set_static(rect):
     staticboxes.append(rect)
 
 def clear_static():
-    staticboxes = []
-    staticboxes_row = []
-    for x in range(YBOXCOUNT+2):
-        staticboxes_row.append([])
+    new_static = staticboxes
+    count = [0] * (len(staticboxes))
+    for rect in new_static:
+        # print((597 - rect.y) // 22)
+        count[((597 - rect.y) // 22) - 1] += 1
 
-    return staticboxes, staticboxes_row
+    for x in range(len(count)-1, -1, -1):
+        if count[x] == XBOXCOUNT:
+            new_static = [i for i in new_static if i.y != 597 - (22 * (x+1))]
 
-# TODO: method clear static
+            for i in range(len(new_static)):
+                if new_static[i].y < 597 - (22 * (x+1)):
+                    new_static[i] = box_move(new_static[i], DOWN)
+
+    return new_static if new_static != [] else staticboxes
 
 def draw_border():
     pygame.draw.rect(DISPLAYSURF, DARKGRAY, LEFTMARGINRECT)
@@ -300,8 +292,6 @@ def generate_piece(piece=None, index=None, label=None, x=None, y=None, rotation=
                 tempRow.append(
                     Rect((xpos + (BOXMOVESTEP * x)), (ypos + (BOXMOVESTEP * y)), BOXSIZE, BOXSIZE))
         tempRect.append(tempRow)
-
-    # print("Current piece is", label)
 
     return tempRect, label, (0 if rotation == None else rotation)
 
